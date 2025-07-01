@@ -8,3 +8,4 @@ gastos.db
 tickets/
 json_examples/
 *.ipynb
+.env

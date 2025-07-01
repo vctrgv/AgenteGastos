@@ -15,10 +15,16 @@ import csv
 import subprocess
 from twilio.rest import Client
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
+
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 
 client = Client(TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN)
 
-pytesseract.pytesseract.tesseract_cmd = r"D:\Tesseract-OCR\tesseract.exe"
+#pytesseract.pytesseract.tesseract_cmd = r"D:\Tesseract-OCR\tesseract.exe"
 
 app = FastAPI()
 carpeta_static = os.path.join(os.getcwd(), "static")
@@ -101,7 +107,7 @@ def generar_descripcion_local(texto_ocr):
 
     try:
         result = subprocess.run(
-            [r'C:\Users\icecr\AppData\Local\Programs\Ollama\ollama.exe','run','llama3'],
+            ['ollama','run','llama3'],
             input=prompt,
             capture_output=True,
             timeout=60,
@@ -266,7 +272,7 @@ async def recibir_mensaje(request: Request):
                 "• ayuda"
             )
         elif texto_usuario == 'dashboard':
-            url = f'https://https://academiccontrol.tail4abb85.ts.net/dashboard.html'
+            url = f'https://academiccontrol.tail4abb85.ts.net/dashboard.html'
             respuesta = f'📊 Tu dashboard: {url}'
         else:
             desde, hasta, desc = interpretar_comando(texto_usuario)
