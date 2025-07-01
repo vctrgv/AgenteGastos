@@ -1,0 +1,10 @@
+# Ignorar entorno virtual
+.venv/
+__pycache__/
+*.pyc
+
+# Datos temporales o personales
+gastos.db
+tickets/
+json_examples/
+*.ipynb
