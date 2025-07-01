@@ -91,19 +91,23 @@ def responder_mensaje(telefono, mensaje):
     )
 
 def generar_descripcion_local(texto_ocr, fallback_heuristica):
-    prompt = f"""Del siguiente texto extraído de un ticket de compra, responde ÚNICAMENTE con una descripción corta del tipo de gasto. No seas conversacional. Usa máximo 6 palabras.
+    prompt = f"""Del siguiente texto extraído de un ticket de compra (posiblemente distorsionado o incompleto), responde con UNA descripción corta del tipo de gasto, como si fuera una categoría. No repitas el texto tal cual. No seas conversacional. Usa máximo 6 palabras.
+
+Categoriza el gasto según lo que se compró o el tipo de transacción. Si no puedes inferirlo, no alucines y responde "Gasto general".
 
 Ejemplos:
-- Compra supermercado
+- Carga de gasolina
 - Pago con tarjeta débito
+- Compra supermercado
 - Depósito BBVA
-- Gasolina
-- Farmacia
 - Restaurante
+- Farmacia
+- Compra ropa
+- Gasto general
 
-TICKET:
-{texto_ocr.strip()}
-DESCRIPCIÓN:"""
+TEXTO DEL TICKET:
+{{texto_ocr}}
+RESPUESTA:"""
 
     def llamar_ollama():
         try:
