@@ -7,6 +7,9 @@ WORKDIR /app
 # Copiar los archivos necesarios
 COPY requirements.txt .
 
+# Instalar pytesseract
+RUN apt-get update && apt-get install -y tesseract-ocr && rm -rf /var/lib/apt/lists/*
+
 # Instalar dependencias
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt

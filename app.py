@@ -12,10 +12,10 @@ import re
 import sqlite3
 import os 
 import csv
-import subprocess
 from twilio.rest import Client
 from pydantic import BaseModel
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 
@@ -90,46 +90,54 @@ def responder_mensaje(telefono, mensaje):
         to=telefono
     )
 
-def generar_descripcion_local(texto_ocr):
-    prompt = """Del siguiente texto extraído de un ticket de compra, responde ÚNICAMENTE con una descripción corta del tipo de gasto. No seas conversacional. Usa máximo 6 palabras.
+def generar_descripcion_local(texto_ocr, fallback_heuristica):
+    prompt = f"""Del siguiente texto extraído de un ticket de compra, responde ÚNICAMENTE con una descripción corta del tipo de gasto. No seas conversacional. Usa máximo 6 palabras.
 
-        Ejemplos:
-        - Compra supermercado
-        - Pago con tarjeta débito
-        - Depósito BBVA
-        - Gasolina
-        - Farmacia
-        - Restaurante
+Ejemplos:
+- Compra supermercado
+- Pago con tarjeta débito
+- Depósito BBVA
+- Gasolina
+- Farmacia
+- Restaurante
 
-        TICKET:
-        {}
-        DESCRIPCIÓN:""".format(texto_ocr.strip())
+TICKET:
+{texto_ocr.strip()}
+DESCRIPCIÓN:"""
 
-    try:
-        result = subprocess.run(
-            ['ollama','run','llama3'],
-            input=prompt,
-            capture_output=True,
-            timeout=60,
-            encoding='utf-8',
-            errors='ignore'
-        )
+    def llamar_ollama():
+        try:
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json={"model": "llama3", "prompt": prompt, "stream": False},
+                timeout=30
+            )
+            response.raise_for_status()
+            output = response.json().get("response", "").strip()
 
-        salida = result.stdout.strip()
+            for linea in output.splitlines():
+                linea = linea.strip()
+                if 3 <= len(linea) <= 60 and not linea.lower().startswith('ticket'):
+                    return linea
+        except Exception as e:
+            print(f"⚠️ Intento fallido con Ollama: {e}")
+            return None
 
-        for linea in salida.splitlines():
-            linea = linea.strip()
-            if 3 <= len(linea) <= 60 and not linea.lower().startswith('ticket'):
-                return linea 
+    # Primer intento
+    descripcion = llamar_ollama()
 
-        return 'Descripción no detectada'
-    
-    except subprocess.TimeoutExpired:
-        print("❌ Error: Ollama se tardó demasiado (timeout).")
-        return "Descripción no detectada"
-    except Exception as e:
-        print("❌ Error con modelo local:", e)
-        return "Descripción no detectada"
+    # Si falla, reintentar una vez
+    if not descripcion:
+        print("🔁 Reintentando con Ollama...")
+        time.sleep(2)
+        descripcion = llamar_ollama()
+
+    # Fallback final
+    if not descripcion:
+        print("🔚 Usando heurística como fallback")
+        descripcion = fallback_heuristica
+
+    return descripcion
 
 def normalizar_monto(raw):
     raw = raw.replace(" ", "").replace("$", "").replace("o", "0").replace("l", "1")
@@ -228,19 +236,22 @@ async def recibir_mensaje(request: Request):
                 print(f"⚠️ Error al descargar la imagen: {response.status_code}")
                 return Response(content="<Response><Message>Error al descargar la imagen</Message></Response>",
                                 media_type="application/xml")
-        
+            
             imagen = Image.open(BytesIO(response.content))
+            nombre_archivo = f"ticket_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+            ruta_relativa = f"static/tickets/{nombre_archivo}"
+            imagen.save(ruta_relativa)
             texto = pytesseract.image_to_string(imagen, lang='eng+spa')
             print("🧾 TEXTO OCR EXTRAÍDO:\n------------------------------")
             print(texto)
-            fecha, _, monto = extraer_info(texto)
+            fecha, descripcion_heuristica, monto = extraer_info(texto)
             print("🧮 Monto detectado final:", monto)
-            descripcion = generar_descripcion_local(texto)
+            descripcion = generar_descripcion_local(texto, descripcion_heuristica)
 
             conn = sqlite3.connect('gastos.db')
             cursor = conn.cursor()
             cursor.execute('INSERT INTO gastos (fecha, descripcion, monto, fuente_imagen, celular) VALUES (?, ?, ?, ?, ?)',
-                        (fecha, descripcion, monto, media_url, sender))
+                        (fecha, descripcion, monto, ruta_relativa, sender))
             conn.commit()
             conn.close()
 
@@ -272,7 +283,7 @@ async def recibir_mensaje(request: Request):
                 "• ayuda"
             )
         elif texto_usuario == 'dashboard':
-            url = f'https://academiccontrol.tail4abb85.ts.net/dashboard.html'
+            url = f'https://agentegastosvm.tail4abb85.ts.net/dashboard.html'
             respuesta = f'📊 Tu dashboard: {url}'
         else:
             desde, hasta, desc = interpretar_comando(texto_usuario)
@@ -311,7 +322,7 @@ async def obtener_gastos(
     conn = sqlite3.connect('gastos.db')
     cursor = conn.cursor()
 
-    query = 'SELECT id, fecha, descripcion, monto FROM gastos'
+    query = 'SELECT id, fecha, descripcion, monto, fuente_imagen FROM gastos'
     filtros = ['eliminado = 0']
     valores = []
 
@@ -334,7 +345,13 @@ async def obtener_gastos(
     rows = cursor.fetchall()
     conn.close()
 
-    return [{'id':r[0], 'fecha': r[1], 'descripcion': r[2], 'monto': r[3]} for r in rows]
+    return [{
+        'id':r[0],
+        'fecha': r[1], 
+        'descripcion': r[2], 
+        'monto': r[3],
+        'fuente_imagen': r[4]
+    } for r in rows]
 
 
 @app.get('/api/gastos/csv')

@@ -47,6 +47,7 @@
             <th>Fecha</th>
             <th>Descripción</th>
             <th>Monto</th>
+            <th>Imagen</th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -213,8 +214,16 @@
             <td>${gasto.fecha}</td>
             <td>${gasto.descripcion}</td>
             <td>$${gasto.monto.toFixed(2)}</td>
+            <td>
+              ${gasto.fuente_imagen
+                ? `<a href="${gasto.fuente_imagen}" target="_blank">
+                    <img src="${gasto.fuente_imagen}" style="height:50px; max-width:80px;" />
+                  </a>`
+                : '—'}
+            </td>
             <td>${acciones}</td>
           </tr>`;
+
       });
 
       totalEl.innerText = total.toFixed(2);
