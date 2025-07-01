@@ -20,5 +20,8 @@ COPY . .
 # Exponer el puerto para documentación (opcional, informativo)
 EXPOSE 8000
 
+# Copiar la base de datos 
+COPY gastos.db .
+
 # Comando para iniciar FastAPI
 CMD ["uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8000"]
